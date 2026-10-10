@@ -1,0 +1,24 @@
+{
+  "regexFilterEnabled": true,
+  "capsRatioThreshold": 0.7,
+  "linkDensityThreshold": 0.4,
+  "autoBlockScoreThreshold": 85,
+  "reviewQueueScoreThreshold": 45,
+  "customKeywords": [
+    "500% return",
+    "free btc",
+    "telegram t.me",
+    "boiling salt water cure",
+    "dox your address",
+    "ruin your career",
+    "100% free money",
+    "whatsapp crypto",
+    "test_central_keyword_123"
+  ],
+  "weights": {
+    "spam": 1.0,
+    "harassment": 1.2,
+    "misleading": 0.9,
+    "nsfw": 1.1
+  }
+}

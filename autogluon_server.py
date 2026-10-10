@@ -6,6 +6,45 @@ import sys
 from autogluon_model import predict_post, get_training_dataset, train_autogluon_model, AUTOGLUON_AVAILABLE
 
 PORT = 5000
+RULES_DB_FILE = os.path.join(os.path.dirname(__file__), 'rules_db.json')
+
+DEFAULT_RULES = {
+    "regexFilterEnabled": True,
+    "capsRatioThreshold": 0.70,
+    "linkDensityThreshold": 0.40,
+    "autoBlockScoreThreshold": 85,
+    "reviewQueueScoreThreshold": 45,
+    "customKeywords": [
+        "500% return",
+        "free btc",
+        "telegram t.me",
+        "boiling salt water cure",
+        "dox your address",
+        "ruin your career",
+        "100% free money",
+        "whatsapp crypto"
+    ],
+    "weights": {
+        "spam": 1.0,
+        "harassment": 1.2,
+        "misleading": 0.9,
+        "nsfw": 1.1
+    }
+}
+
+def load_rules():
+    if os.path.exists(RULES_DB_FILE):
+        try:
+            with open(RULES_DB_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print("Notice: Error reading rules_db.json, loading defaults:", e)
+    return DEFAULT_RULES
+
+def save_rules(rules_data):
+    with open(RULES_DB_FILE, 'w', encoding='utf-8') as f:
+        json.dump(rules_data, f, indent=2)
+    return rules_data
 
 class AutoGluonHandler(http.server.BaseHTTPRequestHandler):
     def _send_cors_headers(self):
@@ -29,6 +68,13 @@ class AutoGluonHandler(http.server.BaseHTTPRequestHandler):
                 'autogluon_installed': AUTOGLUON_AVAILABLE,
                 'engine': 'AutoGluon Multiclass & Multi-label Text Predictor'
             }).encode('utf-8'))
+        elif self.path == '/api/rules':
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            rules = load_rules()
+            self.wfile.write(json.dumps({'success': True, 'rules': rules}).encode('utf-8'))
         elif self.path == '/api/metrics':
             self.send_response(200)
             self._send_cors_headers()
@@ -72,6 +118,24 @@ class AutoGluonHandler(http.server.BaseHTTPRequestHandler):
                     'result': res,
                     'engine_source': 'AutoGluon Python Inference Engine' if AUTOGLUON_AVAILABLE else 'AutoGluon Local Simulation Engine'
                 }).encode('utf-8'))
+            except Exception as e:
+                self.send_response(400)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
+        elif self.path == '/api/rules':
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            try:
+                data = json.loads(body.decode('utf-8'))
+                updated_rules = save_rules(data)
+
+                self.send_response(200)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': True, 'rules': updated_rules}).encode('utf-8'))
             except Exception as e:
                 self.send_response(400)
                 self._send_cors_headers()

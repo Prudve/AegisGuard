@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Sliders, 
   Plus, 
@@ -9,15 +9,22 @@ import {
   Filter,
   ShieldCheck,
   Save,
-  Sparkles
+  Sparkles,
+  Server,
+  Globe
 } from 'lucide-react';
 import { suggestPolicyRulesWithGemini } from '../services/geminiService';
 
-export default function RulesManager({ rulesConfig, onUpdateRules, apiKey }) {
+export default function RulesManager({ rulesConfig, onUpdateRules, isServerSynced, apiKey }) {
   const [config, setConfig] = useState({ ...rulesConfig });
   const [newKeyword, setNewKeyword] = useState('');
   const [saveMessage, setSaveMessage] = useState(false);
   
+  // Sync state if rulesConfig changes from parent/server
+  useEffect(() => {
+    setConfig({ ...rulesConfig });
+  }, [rulesConfig]);
+
   // AI policy generator state
   const [platformType, setPlatformType] = useState('Crypto & Fintech Community');
   const [strictnessLevel, setStrictnessLevel] = useState('BALANCED');
@@ -25,7 +32,9 @@ export default function RulesManager({ rulesConfig, onUpdateRules, apiKey }) {
   const [aiPolicyResult, setAiPolicyResult] = useState(null);
 
   const handleToggleRegex = () => {
-    setConfig(prev => ({ ...prev, regexFilterEnabled: !prev.regexFilterEnabled }));
+    const updated = { ...config, regexFilterEnabled: !config.regexFilterEnabled };
+    setConfig(updated);
+    onUpdateRules(updated);
   };
 
   const handleAddKeyword = (e) => {
@@ -33,18 +42,26 @@ export default function RulesManager({ rulesConfig, onUpdateRules, apiKey }) {
     if (!newKeyword.trim()) return;
     if (config.customKeywords.includes(newKeyword.trim())) return;
 
-    setConfig(prev => ({
-      ...prev,
-      customKeywords: [...prev.customKeywords, newKeyword.trim()]
-    }));
+    const updated = {
+      ...config,
+      customKeywords: [...config.customKeywords, newKeyword.trim()]
+    };
+    setConfig(updated);
+    onUpdateRules(updated);
     setNewKeyword('');
+    setSaveMessage(true);
+    setTimeout(() => setSaveMessage(false), 2500);
   };
 
   const handleRemoveKeyword = (kwToRemove) => {
-    setConfig(prev => ({
-      ...prev,
-      customKeywords: prev.customKeywords.filter(k => k !== kwToRemove)
-    }));
+    const updated = {
+      ...config,
+      customKeywords: config.customKeywords.filter(k => k !== kwToRemove)
+    };
+    setConfig(updated);
+    onUpdateRules(updated);
+    setSaveMessage(true);
+    setTimeout(() => setSaveMessage(false), 2500);
   };
 
   const handleGenerateAiPolicy = async () => {
@@ -60,12 +77,14 @@ export default function RulesManager({ rulesConfig, onUpdateRules, apiKey }) {
       if (res.data) {
         const newKws = res.data.recommendedKeywords || [];
         const mergedKws = Array.from(new Set([...config.customKeywords, ...newKws]));
-        setConfig(prev => ({
-          ...prev,
-          autoBlockScoreThreshold: res.data.autoBlockThreshold || prev.autoBlockScoreThreshold,
-          reviewQueueScoreThreshold: res.data.reviewQueueThreshold || prev.reviewQueueScoreThreshold,
+        const updated = {
+          ...config,
+          autoBlockScoreThreshold: res.data.autoBlockThreshold || config.autoBlockScoreThreshold,
+          reviewQueueScoreThreshold: res.data.reviewQueueThreshold || config.reviewQueueScoreThreshold,
           customKeywords: mergedKws
-        }));
+        };
+        setConfig(updated);
+        onUpdateRules(updated);
       }
     } catch (err) {
       console.error('AI Policy generation error:', err);
@@ -84,13 +103,30 @@ export default function RulesManager({ rulesConfig, onUpdateRules, apiKey }) {
     <div className="tab-container">
       <div className="section-header">
         <div>
-          <h2>Moderation Rules & Policy Manager</h2>
-          <p>Configure automated rule triggers, adjust sensitivity score thresholds, and manage custom blacklisted phrase filters.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+            <h2>Moderation Rules & Policy Manager</h2>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.25rem 0.65rem',
+              borderRadius: '9999px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              background: isServerSynced ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+              color: isServerSynced ? '#10b981' : '#f59e0b',
+              border: `1px solid ${isServerSynced ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
+            }}>
+              <Globe size={12} />
+              {isServerSynced ? 'Central Server Sync Active (All Devices Shared)' : 'Local Storage Cache Mode'}
+            </span>
+          </div>
+          <p>Configure automated rule triggers, adjust sensitivity score thresholds, and manage custom blacklisted phrase filters synced centrally.</p>
         </div>
 
         <button className="btn btn-primary" onClick={handleSave}>
           <Save size={18} />
-          <span>{saveMessage ? 'Rules Saved!' : 'Save Active Rules'}</span>
+          <span>{saveMessage ? 'Synced to Server Database!' : 'Save & Sync Rules'}</span>
         </button>
       </div>
 

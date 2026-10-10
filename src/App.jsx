@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import AutoGluonModerator from './components/AutoGluonModerator';
 import LiveModerator from './components/LiveModerator';
@@ -18,6 +18,8 @@ import {
   DEFAULT_RULES_CONFIG, 
   INITIAL_ANALYTICS 
 } from './data/mockData';
+
+import { fetchCentralRules, saveCentralRules } from './services/rulesService';
 
 import './App.css';
 
@@ -43,7 +45,26 @@ export default function App() {
   const [queueItems, setQueueItems] = useState(INITIAL_QUEUE);
   const [appeals, setAppeals] = useState(INITIAL_APPEALS);
   const [rulesConfig, setRulesConfig] = useState(DEFAULT_RULES_CONFIG);
+  const [isServerSynced, setIsServerSynced] = useState(false);
   const [analytics, setAnalytics] = useState(INITIAL_ANALYTICS);
+
+  // Load central rules from server on startup
+  useEffect(() => {
+    async function initRules() {
+      const res = await fetchCentralRules(DEFAULT_RULES_CONFIG);
+      setRulesConfig(res.rules);
+      setIsServerSynced(res.isSyncedWithServer);
+    }
+    initRules();
+  }, []);
+
+  // Update rules locally & sync to central backend server
+  const handleUpdateRules = (newRules) => {
+    setRulesConfig(newRules);
+    saveCentralRules(newRules).then(res => {
+      setIsServerSynced(res.isSyncedWithServer);
+    });
+  };
 
   // Add newly flagged item to queue
   const handleAddToQueue = (newItem) => {
@@ -123,7 +144,8 @@ export default function App() {
         {activeTab === 'rules-manager' && (
           <RulesManager 
             rulesConfig={rulesConfig}
-            onUpdateRules={setRulesConfig}
+            onUpdateRules={handleUpdateRules}
+            isServerSynced={isServerSynced}
             apiKey={apiKey}
           />
         )}
