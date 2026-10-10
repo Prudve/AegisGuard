@@ -265,34 +265,26 @@ export default function RulesManager({ rulesConfig, onUpdateRules, isServerSynce
           </div>
         </div>
 
-        {/* Custom Blacklist Keywords Card */}
+        {/* System Blacklist Keywords Card (Protected Read-Only) */}
         <div className="card form-card">
-          <div className="card-title">
-            <Filter size={20} className="icon-orange" />
-            <span>Custom Blacklisted Keywords & Phrases ({config.customKeywords.length})</span>
+          <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Filter size={20} className="icon-orange" />
+              <span>Active System Blacklisted Keywords & Phrases ({config.customKeywords.length})</span>
+            </div>
+            <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '4px', border: '1px solid rgba(239, 68, 68, 0.2)', fontWeight: 600 }}>
+              🔒 Protected Policy (Read-Only)
+            </span>
           </div>
 
-          <form onSubmit={handleAddKeyword} className="add-keyword-row">
-            <input 
-              type="text" 
-              className="input-field" 
-              placeholder="Add new spam/harassment keyword..."
-              value={newKeyword}
-              onChange={(e) => setNewKeyword(e.target.value)}
-            />
-            <button type="submit" className="btn btn-secondary">
-              <Plus size={18} />
-              <span>Add Keyword</span>
-            </button>
-          </form>
+          <p className="card-desc" style={{ fontSize: '0.85rem', marginBottom: '1rem', color: '#94a3b8' }}>
+            Official platform moderation keywords used by Step 1 Rule Filter & AutoGluon NLP models. Managed exclusively by system administrators.
+          </p>
 
           <div className="keywords-grid">
             {config.customKeywords.map((kw, i) => (
-              <div key={i} className="keyword-chip-item">
+              <div key={i} className="keyword-chip-item" style={{ cursor: 'default' }}>
                 <span>{kw}</span>
-                <button className="remove-kw-btn" onClick={() => handleRemoveKeyword(kw)}>
-                  <Trash2 size={14} />
-                </button>
               </div>
             ))}
           </div>

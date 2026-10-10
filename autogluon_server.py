@@ -128,36 +128,16 @@ class AutoGluonHandler(http.server.BaseHTTPRequestHandler):
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length)
             try:
-                data = json.loads(body.decode('utf-8'))
-                updated_rules = save_rules(data)
+                # Return current system rules (Protected Policy)
+                current_rules = load_rules()
 
                 self.send_response(200)
                 self._send_cors_headers()
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps({'success': True, 'rules': updated_rules}).encode('utf-8'))
+                self.wfile.write(json.dumps({'success': True, 'rules': current_rules, 'protected': True}).encode('utf-8'))
             except Exception as e:
                 self.send_response(400)
-                self._send_cors_headers()
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': str(e)}).encode('utf-8'))
-        elif self.path == '/api/retrain':
-            try:
-                print("--- Triggering AutoGluon ML Model Retraining via API ---")
-                new_predictor = train_autogluon_model()
-                
-                self.send_response(200)
-                self._send_cors_headers()
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': True,
-                    'message': 'AutoGluon model successfully retrained and reloaded in memory.',
-                    'autogluon_available': AUTOGLUON_AVAILABLE
-                }).encode('utf-8'))
-            except Exception as e:
-                self.send_response(500)
                 self._send_cors_headers()
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()

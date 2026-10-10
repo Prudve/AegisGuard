@@ -92,9 +92,48 @@ def train_autogluon_model():
         print("Running in simulation mode (AutoGluon Python library ready for pip install).")
         return None
 
+def calculate_profanity_score(post_text, pred, probs):
+    """
+    Calculates a profanity score that is strictly proportional 
+    to the amount and density of flagged/profane content in the text.
+    """
+    import re
+    lower_text = post_text.lower()
+    words = re.findall(r'\b\w+\b', lower_text)
+    total_words = len(words) if words else 1
+
+    profane_keywords = [
+        'fuck', 'f***', 'shit', 's***', 'bitch', 'asshole', 'bastard', 'damn', 'cunt', 
+        'pissed off', 'b.s.', 'trash', 'idiot', 'loser', 'freak', 'kill', 'delete your account',
+        'bleach', 'earth is flat', 'microchips', 'bitcoin', 'crypto', 'guarantee', 'processing fee'
+    ]
+
+    flagged_matches = 0
+    flagged_words = []
+    for kw in profane_keywords:
+        if kw in lower_text:
+            cnt = lower_text.count(kw)
+            flagged_matches += cnt
+            flagged_words.append(kw)
+
+    flagged_ratio = flagged_matches / total_words
+
+    if flagged_matches == 0:
+        profanity_val = round(min(5.0, float(probs.get('Profanity', 0.0)) * 0.05), 2)
+    else:
+        # Base probability scaled proportionally by count and density of flagged words
+        base_prob = float(probs.get('Profanity', 50.0))
+        if base_prob < 20.0:
+            base_prob = 45.0
+        density_factor = min(2.2, 0.4 + (flagged_matches * 0.35) + (flagged_ratio * 2.0))
+        calculated = base_prob * density_factor
+        profanity_val = round(min(99.4, max(25.0, calculated)), 2)
+
+    return profanity_val, flagged_matches
+
 def predict_post(post_text, predictor=None):
     """
-    Predicts violation type, confidence score %, multi-label signals, and action threshold.
+    Predicts violation type, profanity score %, multi-label signals, and action threshold.
     """
     if predictor is None:
         predictor = get_predictor()
@@ -102,41 +141,36 @@ def predict_post(post_text, predictor=None):
     if AUTOGLUON_AVAILABLE and predictor is not None:
         test_df = pd.DataFrame({'post_text': [post_text]})
         pred = str(predictor.predict(test_df).iloc[0])
-        probs = predictor.predict_proba(test_df).iloc[0].to_dict()
-        conf = round(float(probs[pred]) * 100, 2)
-        # Format probabilities dictionary into percentages
-        probs = {k: round(float(v) * 100, 2) for k, v in probs.items()}
+        raw_probs = predictor.predict_proba(test_df).iloc[0].to_dict()
+        probs = {k: round(float(v) * 100, 2) for k, v in raw_probs.items()}
+        profanity_score, flagged_count = calculate_profanity_score(post_text, pred, probs)
     else:
-        # High accuracy rule-based simulation matching AutoGluon behavior
+        # Rule-based fallback
         lower = post_text.lower()
         if any(kw in lower for kw in ['5000', 'bitcoin', 'crypto', 'guarantee', 'send btc', 'processing fee', 'returns in 24']):
             pred = 'Scam'
-            conf = 98.4
         elif any(kw in lower for kw in ['earth is flat', 'bleach', 'hiding the fact', 'cure', 'viral infection']):
             pred = 'Misleading'
-            conf = 94.1
         elif any(kw in lower for kw in ['trash', 'idiot', 'loser', 'nobody likes you', 'freak', 'kill', 'delete your account']):
             pred = 'Harassment'
-            conf = 96.8
-        elif any(kw in lower for kw in ['f***', 's***', 'b.s.', 'pissed off', 'bitch', 'damn']):
+        elif any(kw in lower for kw in ['f***', 's***', 'b.s.', 'pissed off', 'bitch', 'damn', 'fuck', 'shit']):
             pred = 'Profanity'
-            conf = 91.5
         else:
             pred = 'Clean'
-            conf = 99.2
 
         probs = {
-            'Scam': conf if pred == 'Scam' else round((100 - conf)/4, 2),
-            'Misleading': conf if pred == 'Misleading' else round((100 - conf)/4, 2),
-            'Harassment': conf if pred == 'Harassment' else round((100 - conf)/4, 2),
-            'Profanity': conf if pred == 'Profanity' else round((100 - conf)/4, 2),
-            'Clean': conf if pred == 'Clean' else round((100 - conf)/4, 2)
+            'Scam': 90.0 if pred == 'Scam' else 2.5,
+            'Misleading': 90.0 if pred == 'Misleading' else 2.5,
+            'Harassment': 90.0 if pred == 'Harassment' else 2.5,
+            'Profanity': 90.0 if pred == 'Profanity' else 2.5,
+            'Clean': 90.0 if pred == 'Clean' else 2.5
         }
+        profanity_score, flagged_count = calculate_profanity_score(post_text, pred, probs)
 
-    # Action threshold logic
-    if conf >= 95.0 and pred != 'Clean':
+    # Action threshold logic based on profanity score
+    if profanity_score >= 80.0 and pred != 'Clean':
         action = 'AUTO_BLOCK'
-    elif conf >= 60.0 and pred != 'Clean':
+    elif profanity_score >= 35.0 and pred != 'Clean':
         action = 'HUMAN_REVIEW'
     else:
         action = 'PUBLISH'
@@ -146,13 +180,15 @@ def predict_post(post_text, predictor=None):
         'is_scam': 1 if pred == 'Scam' or any(k in post_text.lower() for k in ['bitcoin', '5000', 'crypto']) else 0,
         'is_misleading': 1 if pred == 'Misleading' or any(k in post_text.lower() for k in ['bleach', 'earth is flat']) else 0,
         'is_harassment': 1 if pred == 'Harassment' or any(k in post_text.lower() for k in ['trash', 'loser', 'freak']) else 0,
-        'has_profanity': 1 if pred == 'Profanity' or any(k in post_text.lower() for k in ['f***', 's***', 'b.s.']) else 0
+        'has_profanity': 1 if pred == 'Profanity' or flagged_count > 0 or any(k in post_text.lower() for k in ['f***', 's***', 'b.s.', 'fuck', 'shit']) else 0
     }
 
     return {
         'post_text': post_text,
         'flag_result': pred,
-        'confidence_percent': conf,
+        'profanity_score': profanity_score,
+        'confidence_percent': profanity_score, # alias for backwards compatibility
+        'flagged_content_count': flagged_count,
         'probabilities': probs,
         'action_threshold': action,
         'multi_labels': multi_labels

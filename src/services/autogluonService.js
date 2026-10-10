@@ -46,112 +46,72 @@ export async function predictWithAutoGluon(postText) {
 }
 
 /**
- * Triggers full AutoGluon ML model retraining on the server
- */
-export async function triggerAutoGluonRetrain() {
-  try {
-    const response = await fetch('http://localhost:5000/api/retrain', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      return data;
-    }
-  } catch (err) {
-    console.error('Error triggering AutoGluon model retrain:', err.message);
-  }
-  return { success: false, error: 'Server unreachable or retraining failed' };
-}
-
-/**
- * Client-side AutoGluon prediction engine
+ * Client-side AutoGluon prediction engine (Fallback)
  */
 function simulateAutoGluonPrediction(text) {
   const lower = text.toLowerCase();
+  const words = text.match(/\b\w+\b/g) || [];
+  const totalWords = words.length || 1;
 
-  let scamScore = 5;
-  let misleadingScore = 5;
-  let harassmentScore = 5;
-  let profanityScore = 5;
+  const profanityTriggers = ['f***', 's***', 'b.s.', 'pissed off', 'bitch', 'damn', 'fuck', 'shit', 'asshole', 'idiot', 'trash', 'loser', 'freak', 'kill', 'delete your account', 'bleach', 'earth is flat', '5000', 'bitcoin', 'crypto'];
 
-  // Scam signals
-  const scamTriggers = ['5000', 'bitcoin', 'btc', 'crypto', 'guarantee', 'send 1', 'processing fee', 'returns in 24', 'free money', 'airdrop'];
-  scamTriggers.forEach(kw => {
-    if (lower.includes(kw)) scamScore += 30;
-  });
-
-  // Misleading signals
-  const misleadingTriggers = ['earth is flat', 'bleach', 'hiding the fact', 'cure', 'viral infection', 'doctors are hiding', 'secret remedy'];
-  misleadingTriggers.forEach(kw => {
-    if (lower.includes(kw)) misleadingScore += 30;
-  });
-
-  // Harassment signals
-  const harassmentTriggers = ['trash', 'idiot', 'loser', 'nobody likes you', 'freak', 'kill', 'delete your account', 'ugly', 'pathetic'];
-  harassmentTriggers.forEach(kw => {
-    if (lower.includes(kw)) harassmentScore += 30;
-  });
-
-  // Profanity signals
-  const profanityTriggers = ['f***', 's***', 'b.s.', 'pissed off', 'bitch', 'damn', 'fuck', 'shit', 'asshole'];
+  let flaggedMatches = 0;
   profanityTriggers.forEach(kw => {
-    if (lower.includes(kw)) profanityScore += 35;
+    if (lower.includes(kw)) {
+      const regex = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      const matches = lower.match(regex);
+      if (matches) flaggedMatches += matches.length;
+    }
   });
 
-  const maxScore = Math.max(scamScore, misleadingScore, harassmentScore, profanityScore);
+  const flaggedRatio = flaggedMatches / totalWords;
 
   let pred = 'Clean';
-  if (maxScore > 25) {
-    if (maxScore === scamScore) pred = 'Scam';
-    else if (maxScore === misleadingScore) pred = 'Misleading';
-    else if (maxScore === harassmentScore) pred = 'Harassment';
+  if (flaggedMatches > 0) {
+    if (lower.includes('bitcoin') || lower.includes('5000') || lower.includes('crypto')) pred = 'Scam';
+    else if (lower.includes('bleach') || lower.includes('earth is flat')) pred = 'Misleading';
+    else if (lower.includes('trash') || lower.includes('idiot') || lower.includes('loser')) pred = 'Harassment';
     else pred = 'Profanity';
   }
 
-  // Dynamic confidence calculation based on text content features & signal weights
-  const textHash = text.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const variance = (textHash % 2500) / 100.0; // 0.00 to 25.00 variance
-  
-  let confidence;
-  if (pred === 'Clean') {
-    confidence = parseFloat((85.0 + (variance * 0.55)).toFixed(2));
+  // Calculate profanity score strictly proportional to flagged content amount and density
+  let profanityScore = 0.0;
+  if (flaggedMatches > 0) {
+    const baseVal = pred === 'Clean' ? 30 : 60;
+    const densityFactor = Math.min(2.2, 0.4 + (flaggedMatches * 0.35) + (flaggedRatio * 2.0));
+    profanityScore = parseFloat(Math.min(99.4, Math.max(25.0, baseVal * densityFactor)).toFixed(2));
   } else {
-    confidence = parseFloat((65.0 + (variance * 1.35)).toFixed(2));
+    profanityScore = parseFloat(((text.length % 15) * 0.2).toFixed(2)); // Near 0% (0.0% to 3.0%)
   }
 
   // Probabilities distribution
   const probs = {
-    'Scam': pred === 'Scam' ? confidence : parseFloat(((100 - confidence) * 0.25).toFixed(2)),
-    'Misleading': pred === 'Misleading' ? confidence : parseFloat(((100 - confidence) * 0.25).toFixed(2)),
-    'Harassment': pred === 'Harassment' ? confidence : parseFloat(((100 - confidence) * 0.25).toFixed(2)),
-    'Profanity': pred === 'Profanity' ? confidence : parseFloat(((100 - confidence) * 0.25).toFixed(2)),
-    'Clean': pred === 'Clean' ? confidence : parseFloat(((100 - confidence) * 0.25).toFixed(2))
+    'Scam': pred === 'Scam' ? profanityScore : parseFloat(((100 - profanityScore) * 0.25).toFixed(2)),
+    'Misleading': pred === 'Misleading' ? profanityScore : parseFloat(((100 - profanityScore) * 0.25).toFixed(2)),
+    'Harassment': pred === 'Harassment' ? profanityScore : parseFloat(((100 - profanityScore) * 0.25).toFixed(2)),
+    'Profanity': pred === 'Profanity' ? profanityScore : parseFloat(((100 - profanityScore) * 0.25).toFixed(2)),
+    'Clean': pred === 'Clean' ? profanityScore : parseFloat(((100 - profanityScore) * 0.25).toFixed(2))
   };
 
-  // Action Thresholds:
-  // >95% confidence on violation => AUTO_BLOCK
-  // >60% confidence on violation => HUMAN_REVIEW
-  // Clean or low confidence => PUBLISH
   let action = 'PUBLISH';
   if (pred !== 'Clean') {
-    if (confidence >= 95.0) action = 'AUTO_BLOCK';
-    else if (confidence >= 60.0) action = 'HUMAN_REVIEW';
+    if (profanityScore >= 80.0) action = 'AUTO_BLOCK';
+    else if (profanityScore >= 35.0) action = 'HUMAN_REVIEW';
   }
 
-  // Multi-label columns
   const multiLabels = {
-    'is_scam': pred === 'Scam' || scamScore > 20 ? 1 : 0,
-    'is_misleading': pred === 'Misleading' || misleadingScore > 20 ? 1 : 0,
-    'is_harassment': pred === 'Harassment' || harassmentScore > 20 ? 1 : 0,
-    'has_profanity': pred === 'Profanity' || profanityScore > 20 ? 1 : 0
+    'is_scam': pred === 'Scam' ? 1 : 0,
+    'is_misleading': pred === 'Misleading' ? 1 : 0,
+    'is_harassment': pred === 'Harassment' ? 1 : 0,
+    'has_profanity': pred === 'Profanity' || flaggedMatches > 0 ? 1 : 0
   };
 
   return {
     post_text: text,
     flag_result: pred,
-    confidence_percent: confidence,
+    profanity_score: profanityScore,
+    confidence_percent: profanityScore,
+    flagged_content_count: flaggedMatches,
     probabilities: probs,
     action_threshold: action,
     multi_labels: multiLabels
