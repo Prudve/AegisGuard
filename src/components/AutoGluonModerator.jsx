@@ -15,13 +15,11 @@ import {
   ArrowRight,
   Sparkles
 } from 'lucide-react';
-import { predictWithAutoGluon, triggerAutoGluonRetrain } from '../services/autogluonService';
+import { predictWithAutoGluon } from '../services/autogluonService';
 
 export default function AutoGluonModerator({ onAddToQueue }) {
   const [inputText, setInputText] = useState('Send me 1 Bitcoin and I will send you 2 back immediately!');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isRetraining, setIsRetraining] = useState(false);
-  const [retrainNotice, setRetrainNotice] = useState('');
   const [result, setResult] = useState(null);
   const [activeSubTab, setActiveSubTab] = useState('tester'); // 'tester' | 'leaderboard' | 'multilabel'
   const [queuedNotice, setQueuedNotice] = useState(false);
@@ -33,24 +31,6 @@ export default function AutoGluonModerator({ onAddToQueue }) {
     { title: 'Profanity Violation', text: 'What the f*** is wrong with you people?' },
     { title: 'Clean Content', text: 'Beautiful sunset at the beach today, feeling blessed.' }
   ];
-
-  const handleRetrainModel = async () => {
-    setIsRetraining(true);
-    setRetrainNotice('Training AutoGluon ensemble models...');
-    try {
-      const res = await triggerAutoGluonRetrain();
-      if (res.success) {
-        setRetrainNotice('Model successfully retrained & reloaded!');
-      } else {
-        setRetrainNotice('Retraining error: ' + (res.error || 'Server error'));
-      }
-    } catch (e) {
-      setRetrainNotice('Server error during retraining.');
-    } finally {
-      setIsRetraining(false);
-      setTimeout(() => setRetrainNotice(''), 4000);
-    }
-  };
 
   const handleRunInference = async (customText = null) => {
     const textToAnalyze = customText || inputText;
@@ -102,41 +82,25 @@ export default function AutoGluonModerator({ onAddToQueue }) {
           <p>Supervised multi-class and multi-label text classification using AutoGluon TabularPredictor with NLP feature extraction.</p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          {retrainNotice && (
-            <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>
-              {retrainNotice}
-            </span>
-          )}
+        <div className="tab-subnav">
           <button 
-            className="btn btn-secondary" 
-            onClick={handleRetrainModel}
-            disabled={isRetraining}
+            className={`subnav-btn ${activeSubTab === 'tester' ? 'active' : ''}`}
+            onClick={() => setActiveSubTab('tester')}
           >
-            <RotateCcw size={16} className={isRetraining ? 'spin' : ''} />
-            <span>{isRetraining ? 'Retraining...' : 'Retrain ML Model'}</span>
+            <Cpu size={16} /> Live Predictor
           </button>
-
-          <div className="tab-subnav">
-            <button 
-              className={`subnav-btn ${activeSubTab === 'tester' ? 'active' : ''}`}
-              onClick={() => setActiveSubTab('tester')}
-            >
-              <Cpu size={16} /> Live Predictor
-            </button>
-            <button 
-              className={`subnav-btn ${activeSubTab === 'multilabel' ? 'active' : ''}`}
-              onClick={() => setActiveSubTab('multilabel')}
-            >
-              <Layers size={16} /> Multi-Label Architecture
-            </button>
-            <button 
-              className={`subnav-btn ${activeSubTab === 'leaderboard' ? 'active' : ''}`}
-              onClick={() => setActiveSubTab('leaderboard')}
-            >
-              <BarChart2 size={16} /> Model Leaderboard
-            </button>
-          </div>
+          <button 
+            className={`subnav-btn ${activeSubTab === 'multilabel' ? 'active' : ''}`}
+            onClick={() => setActiveSubTab('multilabel')}
+          >
+            <Layers size={16} /> Multi-Label Architecture
+          </button>
+          <button 
+            className={`subnav-btn ${activeSubTab === 'leaderboard' ? 'active' : ''}`}
+            onClick={() => setActiveSubTab('leaderboard')}
+          >
+            <BarChart2 size={16} /> Model Leaderboard
+          </button>
         </div>
       </div>
 
@@ -245,8 +209,8 @@ export default function AutoGluonModerator({ onAddToQueue }) {
                     </div>
 
                     <div className="risk-score-pill">
-                      <span className="risk-score-label">Confidence Score</span>
-                      <span className="risk-score-value">{result.data.confidence_percent}%</span>
+                      <span className="risk-score-label">Profanity Score</span>
+                      <span className="risk-score-value">{result.data.profanity_score ?? result.data.confidence_percent}%</span>
                     </div>
                   </div>
                 </div>

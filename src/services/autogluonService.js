@@ -46,6 +46,26 @@ export async function predictWithAutoGluon(postText) {
 }
 
 /**
+ * Triggers full AutoGluon ML model retraining on the server
+ */
+export async function triggerAutoGluonRetrain() {
+  try {
+    const response = await fetch('http://localhost:5000/api/retrain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    }
+  } catch (err) {
+    console.error('Error triggering AutoGluon model retrain:', err.message);
+  }
+  return { success: false, error: 'Server unreachable or retraining failed' };
+}
+
+/**
  * Client-side AutoGluon prediction engine (Fallback)
  */
 function simulateAutoGluonPrediction(text) {
