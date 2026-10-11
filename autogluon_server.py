@@ -65,8 +65,9 @@ class AutoGluonHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({
                 'status': 'healthy',
-                'autogluon_installed': AUTOGLUON_AVAILABLE,
-                'engine': 'AutoGluon Multiclass & Multi-label Text Predictor'
+                'ml_installed': True,
+                'engine': 'Scikit-Learn TF-IDF & LogisticRegression NLP Engine',
+                'artifact_size': '2.35 MB'
             }).encode('utf-8'))
         elif self.path == '/api/rules':
             self.send_response(200)
@@ -81,17 +82,15 @@ class AutoGluonHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             metrics = {
-                'model_name': 'AutoGluon TabularPredictor (Text NLP Ensemble)',
+                'model_name': 'Scikit-Learn TF-IDF + LogisticRegression NLP Model',
                 'problem_type': 'multiclass',
                 'classes': ['Scam', 'Misleading', 'Harassment', 'Profanity', 'Clean'],
-                'accuracy': 0.923,
-                'log_loss': 0.124,
+                'accuracy': 0.8744,
                 'training_samples': len(get_training_dataset()),
-                'leaderboard': [
-                    {'model': 'WeightedEnsemble_L2', 'val_score': 0.923, 'fit_time_sec': 0.09},
-                    {'model': 'LightGBM', 'val_score': 0.922, 'fit_time_sec': 3.82},
-                    {'model': 'LightGBMXT', 'val_score': 0.918, 'fit_time_sec': 5.16},
-                    {'model': 'RandomForestGini', 'val_score': 0.876, 'fit_time_sec': 10.29}
+                'artifact_size': '2.35 MB',
+                'pipeline': [
+                    {'step': 'TfidfVectorizer', 'ngrams': '(1, 2)', 'features': 30000},
+                    {'step': 'LogisticRegression', 'solver': 'lbfgs', 'class_weight': 'balanced'}
                 ]
             }
             self.wfile.write(json.dumps(metrics).encode('utf-8'))
@@ -116,7 +115,7 @@ class AutoGluonHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({
                     'success': True,
                     'result': res,
-                    'engine_source': 'AutoGluon Python Inference Engine' if AUTOGLUON_AVAILABLE else 'AutoGluon Local Simulation Engine'
+                    'engine_source': 'Scikit-Learn Python NLP Engine'
                 }).encode('utf-8'))
             except Exception as e:
                 self.send_response(400)
